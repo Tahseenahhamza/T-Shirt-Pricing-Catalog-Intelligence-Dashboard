@@ -1,0 +1,210 @@
+# DAX Reference: T-Shirt Pricing & Catalog Intelligence Dashboard
+
+This file lists the 6 calculated columns and 12 measures used in the model.
+
+**Tables used**
+- `'T-Shirt Products'` (fact): Brand, Title, Sale Price, Marked Price, Cost Price
+- `'Brand Tier Reference'` (dimension): Brand, Tier, Origin, Type
+
+> Rename the column names below if yours are different (for example `[Marked Price]` may be `[MRP]` in your model).
+
+---
+
+## Part 1: Calculated Columns (add these in the `'T-Shirt Products'` table)
+
+Use **Table view > New column**, then paste one formula at a time.
+
+### 1. Profit Per Unit
+Money earned on one product after cost.
+```DAX
+Profit Per Unit =
+'T-Shirt Products'[Sale Price] - 'T-Shirt Products'[Cost Price]
+```
+
+### 2. Profit Margin %
+Profit as a share of the selling price.
+```DAX
+Profit Margin % =
+DIVIDE(
+    'T-Shirt Products'[Profit Per Unit],
+    'T-Shirt Products'[Sale Price]
+)
+```
+
+### 3. Discount Amount
+How many rupees were taken off the MRP.
+```DAX
+Discount Amount =
+'T-Shirt Products'[Marked Price] - 'T-Shirt Products'[Sale Price]
+```
+
+### 4. Discount %
+How much of the MRP was taken off.
+```DAX
+Discount % =
+DIVIDE(
+    'T-Shirt Products'[Discount Amount],
+    'T-Shirt Products'[Marked Price]
+)
+```
+
+### 5. Price Band
+Groups products by selling price. **These ranges are an example. Change them to match your report.**
+```DAX
+Price Band =
+SWITCH(
+    TRUE(),
+    'T-Shirt Products'[Sale Price] < 500,  "1. Under 500",
+    'T-Shirt Products'[Sale Price] < 1000, "2. 500 - 999",
+    'T-Shirt Products'[Sale Price] < 2000, "3. 1,000 - 1,999",
+    "4. 2,000 and above"
+)
+```
+
+### 6. Discount Flag
+Marks products with a discount of 70% or more.
+```DAX
+Discount Flag =
+IF(
+    'T-Shirt Products'[Discount %] >= 0.7,
+    "High Discount",
+    "Normal"
+)
+```
+
+---
+
+## Part 2: Measures (create a table folder for each group)
+
+Use **Modeling > New measure**. After creating, set the **Display folder** in the Properties pane.
+
+### Folder: Core Metrics
+
+**1. Total Products**
+```DAX
+Total Products =
+COUNTROWS('T-Shirt Products')
+```
+
+**2. Total Brands**
+```DAX
+Total Brands =
+DISTINCTCOUNT('T-Shirt Products'[Brand])
+```
+
+**3. Avg Sale Price**
+```DAX
+Avg Sale Price =
+AVERAGE('T-Shirt Products'[Sale Price])
+```
+
+**4. Avg MRP**
+```DAX
+Avg MRP =
+AVERAGE('T-Shirt Products'[Marked Price])
+```
+
+### Folder: Discount Analysis
+
+**5. Avg Discount %**
+```DAX
+Avg Discount % =
+AVERAGE('T-Shirt Products'[Discount %])
+```
+
+**6. MRP Inflation Ratio** (average MRP divided by average sale price)
+```DAX
+MRP Inflation Ratio =
+DIVIDE([Avg MRP], [Avg Sale Price])
+```
+Format the measure as `0.00"x"` to show it like `2.32x`.
+
+**7. Extreme Discount %** (share of products with 70% or more discount)
+```DAX
+Extreme Discount % =
+DIVIDE(
+    CALCULATE(
+        COUNTROWS('T-Shirt Products'),
+        'T-Shirt Products'[Discount Flag] = "High Discount"
+    ),
+    [Total Products]
+)
+```
+
+### Folder: Profitability
+
+**8. Est Avg Profit Margin %**
+```DAX
+Est Avg Profit Margin % =
+AVERAGE('T-Shirt Products'[Profit Margin %])
+```
+
+**9. Avg Profit Per Unit**
+```DAX
+Avg Profit Per Unit =
+AVERAGE('T-Shirt Products'[Profit Per Unit])
+```
+
+### Folder: Brand Intelligence
+
+**10. Top Brand** (brand with the most products)
+```DAX
+Top Brand =
+VAR BrandCounts =
+    ADDCOLUMNS(
+        VALUES('T-Shirt Products'[Brand]),
+        "@Products", CALCULATE(COUNTROWS('T-Shirt Products'))
+    )
+VAR TopOne = TOPN(1, BrandCounts, [@Products], DESC)
+RETURN
+    MAXX(TopOne, 'T-Shirt Products'[Brand])
+```
+
+**11. Lowest Avg Price by Brand**
+```DAX
+Lowest Avg Price by Brand =
+MINX(
+    VALUES('T-Shirt Products'[Brand]),
+    CALCULATE(AVERAGE('T-Shirt Products'[Sale Price]))
+)
+```
+
+**12. Highest Avg Price by Brand**
+```DAX
+Highest Avg Price by Brand =
+MAXX(
+    VALUES('T-Shirt Products'[Brand]),
+    CALCULATE(AVERAGE('T-Shirt Products'[Sale Price]))
+)
+```
+
+---
+
+## Part 3: Check your numbers
+
+After adding everything, the cards on the Overview page should match these values (with no filters applied):
+
+| Measure | Expected value |
+|---|---|
+| Total Products | 1,428 |
+| Total Brands | 143 |
+| Avg Sale Price | ₹1,034 |
+| Avg Discount % | 57.1% |
+| MRP Inflation Ratio | 2.32x |
+| Est Avg Profit Margin % | 26.3% |
+| Avg Profit Per Unit | ₹243 |
+| Extreme Discount % | 26.5% |
+| Top Brand | The Indian Garage Co |
+
+If a value does not match, run a quick check in DAX query view:
+
+```DAX
+EVALUATE
+ROW(
+    "Products", [Total Products],
+    "Avg Discount", [Avg Discount %],
+    "MRP Ratio", [MRP Inflation Ratio],
+    "Margin", [Est Avg Profit Margin %],
+    "Profit Per Unit", [Avg Profit Per Unit]
+)
+```
